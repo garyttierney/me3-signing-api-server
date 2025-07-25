@@ -2,10 +2,13 @@
 
 import http.server
 import json
+import os
 from jwt import PyJWKClient, ExpiredSignatureError, DecodeError, decode
 
 PORT = 3000
 JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks"
+ALLOW_ANONYMOUS = os.getenv('ALLOW_ANONYMOUS') == '1'
+
 jwks_client = PyJWKClient(JWKS_URL)
 
 
@@ -14,35 +17,37 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
         import tempfile
         import subprocess
         try:
-            auth = self.headers.get('Authorization')
-            if not auth or not auth.startswith('Bearer '):
-                return self._send(401, {'error': 'Authorization header missing or malformed'})
+            if not ALLOW_ANONYMOUS:
+                auth = self.headers.get('Authorization')
+                if not auth or not auth.startswith('Bearer '):
+                    return self._send(401, {'error': 'Authorization header missing or malformed'})
 
-            if key := self.headers.get('X-Signing-Key') is None:
+                ctype = self.headers.get('Content-Type')
+                if not ctype or ctype != 'application/vnd.microsoft.portable-executable':
+                    return self._send(415, {'error': 'Only PE files are supported'})
+
+                token = auth.split(' ')[1]
+                auth_key = jwks_client.get_signing_key_from_jwt(token).key
+                claims = decode(
+                    token, auth_key, algorithms=["RS256"],
+                    issuer="https://token.actions.githubusercontent.com",
+                    audience="irithyll.me3.help",
+                    options={'require': ['actor']}
+                )
+
+                print(repr(claims))
+
+                if (
+                    claims.get('actor') != 'garyttierney' or
+                    claims.get('repository') != 'garyttierney/me3'
+                ):
+                    return self._send(401, {'error': 'User not authorized'})
+
+            if (key := self.headers.get('X-Signing-Key')) is None:
                 return self._send(400, {'error': 'X-Signing-Key header missing'})
 
-            if pin := self.headers.get('X-Signing-Pin') is None:
+            if (pin := self.headers.get('X-Signing-Pin')) is None:
                 return self._send(400, {'error': 'X-Signing-Pin header missing'})
-
-            ctype = self.headers.get('Content-Type')
-            if not ctype or ctype != 'application/vnd.microsoft.portable-executable':
-                return self._send(415, {'error': 'Only PE files are supported'})
-
-            token = auth.split(' ')[1]
-            key = jwks_client.get_signing_key_from_jwt(token).key
-            claims = decode(
-                token, key, algorithms=["RS256"],
-                issuer="https://token.actions.githubusercontent.com",
-                audience="irithyll.me3.help",
-                options={'require': ['actor']}
-            )
-
-            if (
-                claims.get('actor') != 'garyttierney' or
-                claims.get('repository') != 'garyttierney/me3' or
-                claims.get('ref') != 'refs/heads/feat/remote-signing-service'
-            ):
-                return self._send(401, {'error': 'User not authorized'})
 
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length == 0:
@@ -51,9 +56,10 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
 
             import tempfile
             import glob
-            with tempfile.NamedTemporaryFile(delete=False) as infile, tempfile.NamedTemporaryFile(delete=False) as outfile:
+            with tempfile.NamedTemporaryFile(delete=False) as infile:
                 infile.write(pe_data)
                 infile.flush()
+                outpath = os.path.join(tempfile.mkdtemp(), 'signed.exe')
 
                 pkcs11_candidates = glob.glob(
                     '/opt/proCertumCardManager/sc30pkcs11-*.so')
@@ -71,10 +77,11 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
                     '-h', 'sha256',
                     '-t', 'http://time.certum.pl/',
                     '-in', infile.name,
-                    '-out', outfile.name
+                    '-out', outpath
                 ]
 
                 proc = subprocess.run(osslsigncode_cmd, capture_output=True)
+                print(proc.stdout)
                 if proc.returncode != 0:
                     return self._send(500, {'error': 'Signing failed', 'details': proc.stderr.decode(errors='replace')})
 
@@ -84,7 +91,8 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Disposition',
                              'attachment; filename="signed.exe"')
             self.end_headers()
-            self.wfile.write(outfile)
+            with open(outpath, 'rb') as outfile:
+                self.wfile.write(outfile)
 
         except ExpiredSignatureError:
             self._send(401, {'error': 'Token has expired'})

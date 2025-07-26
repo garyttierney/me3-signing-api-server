@@ -4,6 +4,8 @@ import logging
 import http.server
 import json
 import os
+import shutil
+
 from jwt import PyJWKClient, ExpiredSignatureError, DecodeError, decode
 from logging import info, error
 
@@ -93,8 +95,9 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Disposition',
                              'attachment; filename="signed.exe"')
             self.end_headers()
+
             with open(outpath, 'rb') as outfile:
-                self.wfile.write(outfile)
+                shutil.copyfileobj(outfile, self.wfile)
 
         except ExpiredSignatureError:
             self._send(401, {'error': 'Token has expired'})

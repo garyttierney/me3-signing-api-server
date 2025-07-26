@@ -1,0 +1,16 @@
+[Unit]
+Description=Podman container for me3 Authenticode signing service
+Requires=signing-net.network
+
+[Container]
+Image=me3-signing-service:latest
+Volume=/run/pcscd/pcscd.comm:/run/pcscd/pcscd.comm
+SecurityLabelLevel=s0:c1,c2
+SecurityLabelType=me3_signing_api_server.process
+Network=signingnet
+AutoUpdate=true
+ContainerName=signing-api-server
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

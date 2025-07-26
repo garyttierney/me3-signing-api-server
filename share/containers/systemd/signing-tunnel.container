@@ -1,0 +1,14 @@
+[Unit]
+Description=Podman container for Cloudflare Zero Trust access to the me3 signing service
+Requires=signing-net.network
+
+[Container]
+Image=cloudflare/cloudflared:latest
+Exec=tunnel run
+Network=signingnet
+AutoUpdate=true
+ContainerName=signing-api-tunnel
+Secret=cloudflare-tunnel-token,type=env,target=TUNNEL_TOKEN
+
+[Install]
+WantedBy=default.target

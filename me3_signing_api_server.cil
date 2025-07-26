@@ -1,0 +1,5 @@
+(block me3_signing_api_server
+    (blockinherit container)
+    (blockinherit restricted_net_container)
+    (allow process .pcscd_var_run_t (sock_file (read write)))
+    (allow process .pcscd_t (unix_stream_socket (connectto))))

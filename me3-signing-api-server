@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+import logging
 import http.server
 import json
 import os
 from jwt import PyJWKClient, ExpiredSignatureError, DecodeError, decode
+from logging import info, error
 
 PORT = 3000
 JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks"
@@ -35,7 +37,7 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
                     options={'require': ['actor']}
                 )
 
-                print(repr(claims))
+                info(repr(claims))
 
                 if (
                     claims.get('actor') != 'garyttierney' or
@@ -99,10 +101,11 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
         except DecodeError as e:
             self._send(401, {'error': f'Invalid claims: {e}'})
         except Exception as e:
-            print(f"Error: {e}")
+            error(str(e))
             self._send(500, {'error': 'Internal server error'})
 
     def _send(self, code, body):
+        error(repr(body))
         self.send_response(code)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
@@ -110,12 +113,15 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
+    logging.basicConfig(format='%(levelname)s: %(message)s',
+                        level=logging.DEBUG)
+
     with http.server.HTTPServer(('', PORT), SigningRequestHandler) as httpd:
         print(f"Serving at port {PORT}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\nShutting down.")
+            logging.info("^C, shutting down")
             httpd.shutdown()
 
 

@@ -8,7 +8,7 @@ RUN dnf install -y \
     opensc \
     && dnf clean all
 
-RUN pip install PyJWT[crypto]
+RUN pip install PyJWT[crypto] cryptography
 RUN set -eux; \
     curl -L -o proCertumCardManager-install.bin https://files.certum.eu/software/proCertumCardManager/Linux-RedHat/2.2.13/proCertumCardManager-2.2.13-x86_64-centos.bin; \
     chmod +x proCertumCardManager-install.bin; \

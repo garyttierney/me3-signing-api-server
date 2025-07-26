@@ -4,3 +4,7 @@ Description=Podman network for me3 Authenticode signing service
 [Network]
 Driver=bridge
 NetworkName=signingnet
+
+
+[Install]
+WantedBy=default.target

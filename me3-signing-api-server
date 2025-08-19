@@ -42,7 +42,7 @@ class SigningRequestHandler(http.server.BaseHTTPRequestHandler):
                 info(repr(claims))
 
                 if (
-                    claims.get('actor') != 'garyttierney' or
+                    claims.get('actor') not in ['garyttierney', 'Dasaav-dsv'] or
                     claims.get('repository') != 'garyttierney/me3'
                 ):
                     return self._send(401, {'error': 'User not authorized'})
